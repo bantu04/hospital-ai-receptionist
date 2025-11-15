@@ -3,212 +3,173 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
 
-// Simple department + doctor mapping (dummy data for Aditya Hospital)
-const DEPARTMENTS = [
-  {
-    name: 'General Medicine',
-    keywords: ['fever', 'cold', 'cough', 'viral', 'weakness', 'general checkup'],
-    doctor: 'Dr. Rohan Iyer',
-    days: 'Mon–Sat',
-    timing: '9:00 AM – 1:00 PM, 5:00 PM – 8:00 PM'
-  },
-  {
-    name: 'Cardiology',
-    keywords: ['heart', 'chest pain', 'bp', 'hypertension', 'palpitation', 'angina'],
-    doctor: 'Dr. Meera Singh',
-    days: 'Mon, Wed, Fri',
-    timing: '10:00 AM – 2:00 PM'
-  },
-  {
-    name: 'Orthopaedics',
-    keywords: ['knee pain', 'joint', 'back pain', 'fracture', 'bone', 'shoulder'],
-    doctor: 'Dr. Aditya Reddy',
-    days: 'Tue, Thu, Sat',
-    timing: '11:00 AM – 3:00 PM'
-  },
-  {
-    name: 'Neurology',
-    keywords: ['migraine', 'seizure', 'fits', 'stroke', 'paralysis', 'nerve'],
-    doctor: 'Dr. Kavya Nair',
-    days: 'Mon–Sat',
-    timing: '4:00 PM – 7:00 PM'
-  },
-  {
-    name: 'Gastroenterology',
-    keywords: ['stomach', 'acidity', 'ulcer', 'vomiting', 'loose motion', 'liver'],
-    doctor: 'Dr. Vikas Sharma',
-    days: 'Mon–Sat',
-    timing: '10:30 AM – 1:30 PM'
-  },
-  {
-    name: 'Pulmonology',
-    keywords: ['asthma', 'breathing', 'shortness of breath', 'lung', 'covid'],
-    doctor: 'Dr. Sneha Kulkarni',
-    days: 'Tue, Thu, Sat',
-    timing: '9:30 AM – 12:30 PM'
-  },
-  {
-    name: 'Dermatology',
-    keywords: ['skin', 'rashes', 'pimples', 'acne', 'allergy', 'itching'],
-    doctor: 'Dr. Priya Jain',
-    days: 'Mon–Sat',
-    timing: '3:00 PM – 6:00 PM'
-  },
-  {
-    name: 'Gynaecology',
-    keywords: ['pregnancy', 'period', 'gyne', 'women health', 'pcos', 'fertility'],
-    doctor: 'Dr. Anusha Rao',
-    days: 'Mon–Sat',
-    timing: '10:00 AM – 2:00 PM'
-  }
-];
-
 export class GeminiService {
+  /**
+   * conversationHistory: array like [
+   *   { role: 'user'|'assistant', content: 'text', timestamp: ... }
+   * ]
+   * currentPatient: null or patient object from Firestore
+   */
   static async generateResponse(conversationHistory, currentPatient = null) {
     try {
       console.log('🧠 Gemini: generating response...');
 
-      const modelName = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
-
       const model = genAI.getGenerativeModel({
-        model: modelName,
+        // Use a stable model that works with v1beta
+        model: 'gemini-1.0-pro-latest',
         generationConfig: {
           temperature: 0.7,
           topP: 0.9,
           topK: 40,
-          maxOutputTokens: 400
-        }
+          maxOutputTokens: 300,
+        },
       });
 
-      const systemPrompt = this.buildSystemPrompt(currentPatient);
-      const contents = this.formatConversation(conversationHistory, systemPrompt);
+      const prompt = this.buildPrompt(conversationHistory, currentPatient);
 
-      // 🔴 IMPORTANT: pass { contents } object, not just array
-      const result = await model.generateContent({ contents });
-      const response = await result.response;
+      const result = await model.generateContent(prompt);
+      const response = result.response;
       const text = response.text();
 
-      console.log('✅ Gemini response OK');
-
+      console.log('✅ Gemini: response OK');
       return {
         text,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       };
     } catch (error) {
       console.error('❌ Gemini error:', error);
+
       const fallbacks = [
-        "Sorry, I’m having a technical issue right now. Could you please repeat that once?",
-        "I’m facing some connectivity issues. Please try asking again in a simple way.",
-        "I’m not able to process that properly at the moment. Let me try again, could you repeat slowly?"
+        'Sorry, I am having a technical issue right now. Could you please repeat that once?',
+        'I am facing some connection issues. Please say that again slowly.',
+        'I could not process that properly. Can you repeat in simple words?',
       ];
+
       return {
         text: fallbacks[Math.floor(Math.random() * fallbacks.length)],
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       };
     }
   }
 
-  static buildSystemPrompt(currentPatient) {
+  /**
+   * Build one big prompt string for Gemini.
+   */
+  static buildPrompt(conversationHistory, currentPatient) {
     const patientContext = currentPatient
       ? `
-Current Patient:
+Current Patient
 - Name: ${currentPatient.name || 'Unknown'}
-- Known Conditions: ${currentPatient.medicalConditions?.join(', ') || 'None recorded'}
-- Last Appointment: ${currentPatient.lastAppointment || 'Not recorded'}
-- Medications: ${currentPatient.medications?.join(', ') || 'None recorded'}
+- Phone: ${currentPatient.phoneNumbers?.[0] || 'Unknown'}
+- Known conditions: ${currentPatient.medicalConditions?.join(', ') || 'None recorded'}
 - Allergies: ${currentPatient.allergies?.join(', ') || 'None recorded'}
-    `.trim()
-      : 'No verified patient identity yet. Speak generally and ask for basic details if needed.';
+- Active medications: ${currentPatient.medications?.join(', ') || 'None recorded'}
+- Last appointment: ${currentPatient.lastAppointment || 'No recent appointment on record'}
+      `.trim()
+      : 'No patient record matched to this phone number yet. Treat as new patient.';
 
-    const departmentText = DEPARTMENTS.map((d, i) => {
-      return `${i + 1}. Department: ${d.name}
-   - Typical problems: ${d.keywords.join(', ')}
-   - Main doctor: ${d.doctor}
-   - Availability: ${d.days}, ${d.timing}`;
-    }).join('\n\n');
+    // Simple conversation transcript
+    const convoText =
+      conversationHistory && conversationHistory.length
+        ? conversationHistory
+            .map(
+              (msg) =>
+                `${msg.role === 'user' ? 'Patient' : 'Clara'}: ${msg.content}`
+            )
+            .join('\n')
+        : 'No previous messages, this is the first thing the patient said.';
 
-    return `
-You are **Clara**, the AI voice receptionist for **Aditya Hospital**, a multi-speciality hospital in Hyderabad, India.
+    // Very simple “router” for departments – Gemini will use these as guidelines
+    const departments = `
+DEPARTMENTS & DOCTORS (DUMMY INTERNAL DATA – DO NOT SAY "THIS IS FAKE")
+- General Medicine
+  • Dr. Arjun Rao – Mon–Sat, 10:00–13:00 & 17:00–20:00
+  • Common issues: fever, cold, cough, mild infections, general checkup.
 
-🎯 PRIMARY GOAL  
-Handle phone calls like a real human receptionist:
-- Greet patients politely.
-- Understand why they are calling.
-- Route them to the correct department/doctor.
-- Offer appointment options (date + approximate time).
-- Speak in **simple, clear English** with light Indian style.
-- If patient speaks Hindi or Telugu words, you can mix a few words to sound natural, but keep replies mostly in simple English.
+- Cardiology
+  • Dr. Kavya Menon – Mon, Wed, Fri, 10:00–14:00
+  • Handles: chest pain, heart disease, high BP with heart issues, palpitations.
 
-📞 FIRST GREETING RULE  
-On the **first turn of every new call**, your greeting must be:
+- Gastroenterology
+  • Dr. Rohan Desai – Tue, Thu, Sat, 11:00–15:00
+  • Handles: stomach pain, acidity, gastric issues, vomiting, loose motion.
 
-"Namaste. Aditya Hospital reception, this is Clara. How can I help you today?"
+- Orthopedics
+  • Dr. Nisha Kapoor – Mon–Sat, 09:00–12:30
+  • Handles: back pain, knee pain, joint pain, fractures, sprains.
 
-Do **not** repeat this full line every time, only at the very start.  
-On follow-up turns you can say things like:
-- "Okay, sure. Please tell me a bit more."
-- "I understand. Let me check the doctor’s availability."
+- Neurology
+  • Dr. Vikram Shah – Tue, Thu, Sat, 16:00–20:00
+  • Handles: seizures, fits, migraine, stroke follow-up, nerve problems.
 
-🏥 HOSPITAL DEPARTMENTS & DOCTORS (DUMMY BUT CONSISTENT)  
-Use this mapping to decide which doctor/department is relevant:
+- Gynecology
+  • Dr. Anjali Reddy – Mon–Sat, 11:00–15:00
+  • Handles: pregnancy follow-up, periods issues, women’s health problems.
 
-${departmentText}
+RULES:
+- Route stomach / gastric issues → Gastroenterology.
+- Chest pain / heart issues → Cardiology.
+- Joint / bone / back pain → Orthopedics.
+- Headache with neuro symptoms / seizures → Neurology.
+- Pregnancy / periods / women’s issues → Gynecology.
+- Fever / cold / general symptoms → General Medicine.
+    `.trim();
 
-📌 ROUTING LOGIC (VERY IMPORTANT)
-- Based on the caller’s symptoms/words, map to the closest department above.
-- Clearly mention: department + doctor name + available days/timing.
-- Example:  
-  "From your symptoms, this comes under **Cardiology**. I would suggest an appointment with **Dr. Meera Singh**. She is available on **Monday, Wednesday and Friday between 10 AM and 2 PM**."
+    const system = `
+You are **Clara**, an AI voice receptionist for **Aditya Hospital** in Hyderabad.
 
-👤 PATIENT CONTEXT  
+🔊 PHONE STYLE
+- Start the very first answer with: 
+  "Namaste, Aditya Hospital reception. This is Clara speaking. How can I help you today?"
+- After that, speak naturally in simple, clear English.
+- Keep answers short and friendly (2–4 sentences).
+- Do NOT give medical diagnosis or prescribe medicines.
+- If the caller asks for medical advice, say:
+  "I am not a doctor, but I can book an appointment with the right specialist for you."
+
+📂 PATIENT CONTEXT
 ${patientContext}
 
-If patient has called before and we know their name/condition, acknowledge it, e.g.:
-- "Last time you visited for back pain. How is your back pain now?"
-- If they say it is fine, respond positively and continue.
-- If they say it is worse, gently suggest appointment again.
+🏥 HOSPITAL LOGIC
+${departments}
 
-🩺 WHAT YOU MUST NOT DO  
-- Do **NOT** give medical diagnosis or exact treatment.
-- Do **NOT** prescribe medicines.
-- For any emergency keywords (e.g. severe chest pain, unconscious, heavy bleeding, accident), say:
-  "This sounds like an emergency. Please go to the nearest emergency department immediately or call local emergency services."
+BOOKING / SCHEDULING BEHAVIOUR
+- If the patient clearly wants to book an appointment:
+  1) Confirm what problem they have and which doctor they prefer (if any).
+  2) Pick a **reasonable** slot from the doctor’s schedule above 
+     (you don’t know real-time occupancy, so just propose a suitable time).
+  3) Confirm day + time clearly, repeat it once more.
+  4) Keep a summary you would send to the hospital staff (but just say it to the patient).
+- If they mention a previous visit or same problem again:
+  - Acknowledge: "Last time you visited for similar issue, right?"
+  - Then continue to book/reschedule logically.
 
-🎙️ SPEAKING STYLE  
-- Talk like a calm, kind receptionist.
-- Short, clear sentences (suitable for phone).
-- Leave small pauses in text using commas and full stops.
-- Don’t speak like a robot list; speak like natural conversation.
-- Use the patient’s name when known.
+LANGUAGE RULES
+- Assume the Twilio call audio is coming in English. If you detect a Hindi word like "Namaste", you can sprinkle small Hindi phrases like "ji" or "thoda" naturally, but keep the main response English.
+- Always remain respectful, calm, and empathetic.
 
-Your output must be only what Clara will **say aloud to the caller**. No JSON, no labels, no explanations.
-    `.trim();
-  }
+SAFETY / EMERGENCY
+- If the caller describes severe emergency (chest pain + sweating, difficulty breathing, unconscious patient, accident with heavy bleeding, stroke symptoms, etc.):
+  - Say: "This sounds serious. Please go to the nearest emergency department or call your local emergency number immediately."
+  - Do NOT try to handle emergency bookings – always push them to emergency care.
 
-  static formatConversation(conversationHistory, systemPrompt) {
-    const contents = [];
+Your job is:
+- Understand the caller’s intent from the transcript.
+- Answer like a real, kind human receptionist.
+- Book / suggest appointments with the correct doctor as per the problem.
+- Ask follow-up questions if needed.
+- End the call politely if the user is done, with something like:
+  "Thank you for calling Aditya Hospital. Take care!"
+`.trim();
 
-    // System behaviour as a user "instruction" to the model
-    contents.push({
-      role: 'user',
-      parts: [{ text: systemPrompt }]
-    });
+    return `
+${system}
 
-    // Model acknowledges internally (helps stabilise behaviour)
-    contents.push({
-      role: 'model',
-      parts: [{ text: 'Understood. I will act as Clara, the AI receptionist for Aditya Hospital and speak naturally on calls.' }]
-    });
+==== CONVERSATION SO FAR ====
+${convoText}
 
-    // Add real conversation turns
-    conversationHistory.forEach(msg => {
-      contents.push({
-        role: msg.role === 'user' ? 'user' : 'model',
-        parts: [{ text: msg.content }]
-      });
-    });
-
-    return contents;
+Now, reply as Clara in a single turn. Do NOT show any of these internal notes, just speak as if you are talking on the phone.
+`.trim();
   }
 }
 
