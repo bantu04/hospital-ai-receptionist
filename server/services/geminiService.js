@@ -1,9 +1,10 @@
+// server/services/geminiService.js
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
 
 export class GeminiService {
-  static async generateResponse(conversationHistory, currentPatient = null) {
+  static async generateResponse(conversationHistory = [], currentPatient = null) {
     try {
       console.log('🧠 Gemini: generating response...');
 
@@ -13,105 +14,111 @@ export class GeminiService {
           temperature: 0.8,
           topP: 0.9,
           topK: 40,
-          maxOutputTokens: 500
-        }
+          maxOutputTokens: 500,
+        },
       });
 
       const systemPrompt = this.buildSystemPrompt(currentPatient);
-      const formatted = this.formatConversation(conversationHistory, systemPrompt);
+      const contents = this.formatConversation(conversationHistory, systemPrompt);
 
-      const result = await model.generateContent(formatted);
-      const response = await result.response;
+      // ⬅️ IMPORTANT: wrap in { contents: [...] }
+      const result = await model.generateContent({ contents });
+      const response = result.response;
       const text = response.text();
+
+      console.log('✅ Gemini response OK');
 
       return {
         text,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       };
-    } catch (err) {
-      console.error('❌ Gemini error:', err.message);
+    } catch (error) {
+      console.error('❌ Gemini error:', error);
 
       const fallbacks = [
-        "I'm having trouble processing that right now, could you please repeat?",
-        'Sorry, the system is a bit slow. Can you say that again in a simple way?',
-        'I am facing a technical issue at the moment. Please try once more.'
+        "I'm having a bit of trouble understanding that. Could you say it again in a different way?",
+        "Sorry, I ran into a technical issue. Could you please repeat that?",
+        "I’m experiencing a small glitch. Please try once more.",
       ];
 
       return {
         text: fallbacks[Math.floor(Math.random() * fallbacks.length)],
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       };
     }
   }
 
-  static buildSystemPrompt(patient) {
-    const patientContext = patient
+  static buildSystemPrompt(currentPatient) {
+    const patientContext = currentPatient
       ? `
-Current Patient:
-- Name: ${patient.name || 'Unknown'}
-- Conditions: ${patient.medicalConditions?.join(', ') || 'None recorded'}
-- Last Appointment: ${patient.lastAppointment || 'Not available'}
-- Medications: ${patient.medications?.join(', ') || 'None'}
-- Allergies: ${patient.allergies?.join(', ') || 'None'}
-`.trim()
-      : 'No patient identified yet for this phone number.';
+Current Patient: ${currentPatient.name}
+Medical History: ${currentPatient.medicalConditions?.join(', ') || 'None recorded'}
+Last Appointment: ${currentPatient.lastAppointment || 'No recent appointments'}
+Active Medications: ${currentPatient.medications?.join(', ') || 'None'}
+Known Allergies: ${currentPatient.allergies?.join(', ') || 'None'}
+    `.trim()
+      : 'No patient identified yet. You are speaking to a caller whose identity is not yet verified.';
 
+    // You can rename City General Hospital → Aditya Hospital here later if you want
     return `
-You are an AI receptionist for **Aditya Hospital**, in India.
+You are an AI receptionist for a real hospital. You answer phone calls and speak naturally.
 
-Your job:
-1. Greet callers warmly and naturally.
-2. Understand whether they want:
-   - new appointment,
-   - reschedule/cancel,
-   - follow-up about existing issue,
-   - information (timings, location, departments, etc.).
-3. Ask the right follow-up questions (symptoms, doctor name, preferred time, etc.).
-4. Suggest suitable time slots (you will be given available slots).
-5. Confirm details clearly and politely.
-6. For emergencies (severe pain, breathing issues, chest pain, accidents, etc.) you must say:
-   - "This sounds serious. Please go to the nearest emergency department immediately or call emergency services."
+ROLE:
+- You are a warm, professional hospital receptionist.
+- You help patients with appointments, basic information, and routing — you do NOT give medical advice.
 
-Rules:
-- DO NOT give medical diagnosis.
-- DO NOT prescribe medicines.
-- If unsure, say that a human receptionist or doctor will check and get back.
-- Speak in **very simple, clear English**.
-
-Patient context:
+PATIENT CONTEXT:
 ${patientContext}
 
-Your answers should be:
-- 1–3 short sentences max.
-- Friendly, calm, and confident.
-- Always end with a question that moves the conversation forward (unless call is ending).
-`.trim();
+CORE RESPONSIBILITIES:
+1. Greet callers politely and ask how you can help.
+2. Help with:
+   - Booking, rescheduling, and cancelling appointments
+   - Checking approximate doctor/department availability (use reasonable assumptions)
+   - Answering basic hospital questions (timings, location, departments).
+3. If someone describes serious or emergency symptoms (e.g. chest pain, difficulty breathing, heavy bleeding, accident):
+   - Tell them clearly to seek emergency services or visit the emergency department immediately.
+4. Never give diagnosis, prescriptions, or detailed medical advice. Always say a doctor must decide that.
+
+SPEAKING STYLE:
+- Short, clear sentences as if you are talking on the phone.
+- Friendly but professional.
+- Use the caller’s name if they give it.
+- Ask one question at a time.
+- If you didn’t understand, politely ask them to repeat.
+- End the call by summarising what you’ve done (e.g. “I’ve booked your appointment…”) and a friendly goodbye.
+
+OUTPUT FORMAT:
+- Answer ONLY with what you would say aloud to the caller. No labels like "AI:" or "Assistant:".
+- Keep each response 1–3 sentences so it feels natural in a phone call.
+
+Today’s date: ${new Date().toLocaleDateString()}
+    `.trim();
   }
 
-  static formatConversation(history, systemPrompt) {
-    const msgs = [
-      {
-        role: 'user',
-        parts: [{ text: systemPrompt }]
-      },
-      {
-        role: 'model',
-        parts: [
-          {
-            text: "Understood. I'll act as Aditya Hospital's AI receptionist with empathy and clarity."
-          }
-        ]
-      }
-    ];
+  static formatConversation(conversationHistory, systemPrompt) {
+    const contents = [];
 
-    history.forEach((msg) => {
-      msgs.push({
-        role: msg.role === 'user' ? 'user' : 'model',
-        parts: [{ text: msg.content }]
-      });
+    // System-style priming as if user told you the instructions
+    contents.push({
+      role: 'user',
+      parts: [{ text: systemPrompt }],
     });
 
-    return msgs;
+    contents.push({
+      role: 'model',
+      parts: [{ text: 'Understood. I will act as the hospital receptionist and speak naturally on the phone.' }],
+    });
+
+    // Add actual caller conversation history
+    for (const msg of conversationHistory) {
+      contents.push({
+        role: msg.role === 'user' ? 'user' : 'model',
+        parts: [{ text: msg.content }],
+      });
+    }
+
+    return contents;
   }
 }
 
