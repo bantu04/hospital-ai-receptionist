@@ -1,0 +1,9 @@
+# Ignore env files (secrets)
+.env
+server/.env
+client/.env
+
+# Node modules and build output
+node_modules/
+dist/
+build/
