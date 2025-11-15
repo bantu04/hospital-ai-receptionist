@@ -1,24 +1,21 @@
+// server/services/twilioService.js
 import twilio from 'twilio';
 
+// Twilio client using env vars
 const client = twilio(
   process.env.TWILIO_ACCOUNT_SID,
   process.env.TWILIO_AUTH_TOKEN
 );
 
-// 👇 choose the voice once here so it's easy to tweak
-// Some nice Polly options:
-//   - Polly.Joanna  (US female, natural)
-//   - Polly.Matthew (US male, natural)
-//   - Polly.Aditi   (Indian English / Hindi mix accent)
-//   - Polly.Raveena (Indian English female)
+// Choose Twilio / Polly neural voice
+// Some options: Polly.Joanna, Polly.Matthew, Polly.Aditi, Polly.Raveena
 const POLLY_VOICE = process.env.TWILIO_VOICE || 'Polly.Joanna';
 
 export class TwilioService {
-
   static generateTwiMLResponse(message) {
     const twiml = new twilio.twiml.VoiceResponse();
 
-    // Main reply – use Polly neural voice
+    // Clara's reply
     twiml.say(
       {
         voice: POLLY_VOICE,
@@ -27,7 +24,7 @@ export class TwilioService {
       message
     );
 
-    // Then ask for the next utterance
+    // Ask for caller's next speech
     twiml.gather({
       input: 'speech',
       action: `${process.env.SERVER_BASE_URL}/api/twilio/transcribe`,
@@ -43,15 +40,16 @@ export class TwilioService {
   static generateWelcomeTwiML() {
     const twiml = new twilio.twiml.VoiceResponse();
 
+    // 👇 First line the caller hears
     twiml.say(
       {
         voice: POLLY_VOICE,
         language: 'en-US'
       },
-      'Hello. Thank you for calling Aditya Hospital. ' +
-        'My name is your AI receptionist. How can I help you today?'
+      'Namaste. Aditya Hospital reception, this is Clara. How can I help you today?'
     );
 
+    // Wait for the first response
     twiml.gather({
       input: 'speech',
       action: `${process.env.SERVER_BASE_URL}/api/twilio/transcribe`,
