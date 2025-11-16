@@ -1,37 +1,40 @@
 // server/services/twilioService.js
 import twilio from 'twilio';
 
-// Twilio client using env vars
-const client = twilio(
-  process.env.TWILIO_ACCOUNT_SID,
-  process.env.TWILIO_AUTH_TOKEN
-);
+const hasTwilioCreds =
+  process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN;
 
-// Choose Twilio / Polly neural voice
-// Some options: Polly.Joanna, Polly.Matthew, Polly.Aditi, Polly.Raveena
-const POLLY_VOICE = process.env.TWILIO_VOICE || 'Polly.Joanna';
+let client = null;
+
+if (hasTwilioCreds) {
+  client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+} else {
+  console.warn('⚠️ TWILIO_ACCOUNT_SID or TWILIO_AUTH_TOKEN not set. Twilio REST calls are disabled for this run.');
+}
+
+// ✅ Use a more reliable TTS voice
+const TTS_VOICE = 'alice'; // More reliable than Polly.Joanna
+const LANGUAGE = 'en-IN'; // Changed to Indian English
 
 export class TwilioService {
   static generateTwiMLResponse(message) {
     const twiml = new twilio.twiml.VoiceResponse();
 
-    // Clara's reply
     twiml.say(
       {
-        voice: POLLY_VOICE,
-        language: 'en-US'
+        voice: TTS_VOICE,
+        language: LANGUAGE,
       },
       message
     );
 
-    // Ask for caller's next speech
     twiml.gather({
       input: 'speech',
       action: `${process.env.SERVER_BASE_URL}/api/twilio/transcribe`,
       method: 'POST',
       speechTimeout: 'auto',
       speechModel: 'phone_call',
-      language: 'en-US'
+      language: 'en-IN',
     });
 
     return twiml.toString();
@@ -40,23 +43,21 @@ export class TwilioService {
   static generateWelcomeTwiML() {
     const twiml = new twilio.twiml.VoiceResponse();
 
-    // 👇 First line the caller hears
     twiml.say(
       {
-        voice: POLLY_VOICE,
-        language: 'en-US'
+        voice: TTS_VOICE,
+        language: LANGUAGE,
       },
-      'Namaste. Aditya Hospital reception, this is Clara. How can I help you today?'
+      'Namaste, Aditya Hospital reception. This is Clara, your AI assistant. How can I help you today?'
     );
 
-    // Wait for the first response
     twiml.gather({
       input: 'speech',
       action: `${process.env.SERVER_BASE_URL}/api/twilio/transcribe`,
       method: 'POST',
       speechTimeout: 'auto',
       speechModel: 'phone_call',
-      language: 'en-US'
+      language: 'en-IN',
     });
 
     return twiml.toString();
@@ -67,28 +68,28 @@ export class TwilioService {
 
     twiml.say(
       {
-        voice: POLLY_VOICE,
-        language: 'en-US'
+        voice: TTS_VOICE,
+        language: LANGUAGE,
       },
       'Thank you for calling Aditya Hospital. Take care and have a good day.'
     );
 
     twiml.hangup();
+
     return twiml.toString();
   }
 
   static async makeOutboundCall(to, message) {
+    if (!client) {
+      console.warn('⚠️ Cannot make outbound call: Twilio client not initialized.');
+      return null;
+    }
+
     try {
       const call = await client.calls.create({
-        twiml: `
-          <Response>
-            <Say voice="${POLLY_VOICE}">
-              ${message}
-            </Say>
-          </Response>
-        `,
-        to,
-        from: process.env.TWILIO_PHONE_NUMBER
+        twiml: `<Response><Say voice="${TTS_VOICE}" language="${LANGUAGE}">${message}</Say></Response>`,
+        to: to,
+        from: process.env.TWILIO_PHONE_NUMBER,
       });
 
       console.log('✅ Outbound call initiated:', call.sid);
