@@ -1,0 +1,12 @@
+{
+  "name": "hospital-ai-receptionist",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Intelligent Hospital AI Receptionist with Doctor Allocation",
+  "main": "server.js",
+  "scripts": {
+    "start": "node -r dotenv/config server.js",
+    "dev": "nodemon -r dotenv/config server.js",
+    "test": "node test-receptionist.js"
+  }
+}
