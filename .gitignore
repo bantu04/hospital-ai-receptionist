@@ -1,0 +1,16 @@
+# Node modules
+node_modules/
+server/node_modules/
+client/node_modules/
+dist/
+build/
+
+# Env files
+.env
+server/.env
+client/.env
+
+# OS/editor junk
+.DS_Store
+Thumbs.db
+

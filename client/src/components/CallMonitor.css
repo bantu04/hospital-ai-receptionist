@@ -1,0 +1,148 @@
+.call-monitor {
+  padding: 20px;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.monitor-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 18px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.4);
+}
+
+.monitor-header h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 1.1rem;
+}
+
+.call-stats {
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid rgba(99, 102, 241, 0.7);
+  color: #a5b4fc;
+  font-size: 0.8rem;
+}
+
+.calls-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 16px;
+}
+
+.empty-state {
+  grid-column: 1 / -1;
+  padding: 50px 20px;
+  border-radius: 18px;
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px dashed rgba(148, 163, 184, 0.6);
+  text-align: center;
+  color: #9ca3af;
+}
+
+.empty-state h3 {
+  margin-top: 12px;
+  margin-bottom: 4px;
+  font-size: 1.1rem;
+  color: #e5e7eb;
+}
+
+.call-card {
+  border-radius: 16px;
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid rgba(148, 163, 184, 0.5);
+  padding: 14px;
+  backdrop-filter: blur(12px);
+}
+
+.call-card:hover {
+  border-color: rgba(99, 102, 241, 0.8);
+}
+
+.call-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.4);
+}
+
+.caller-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+}
+
+.caller-number {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas;
+  font-weight: 600;
+}
+
+.call-duration {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.75rem;
+  color: #22c55e;
+}
+
+.call-conversation h4 {
+  font-size: 0.85rem;
+  margin-bottom: 6px;
+  color: #e5e7eb;
+}
+
+.conversation-message {
+  padding: 8px 10px;
+  border-radius: 10px;
+  margin-bottom: 6px;
+  font-size: 0.82rem;
+}
+
+.conversation-message.user {
+  background: rgba(99, 102, 241, 0.18);
+}
+
+.conversation-message.assistant {
+  background: rgba(148, 163, 184, 0.2);
+}
+
+.message-role {
+  font-weight: 600;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #a5b4fc;
+}
+
+.conversation-message.assistant .message-role {
+  color: #bbf7d0;
+}
+
+.conversation-message p {
+  margin-top: 4px;
+}
+
+.message-time {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.7rem;
+  color: #9ca3af;
+}
+
+.no-messages {
+  font-size: 0.8rem;
+  color: #9ca3af;
+  font-style: italic;
+}
+
+.call-monitor::-webkit-scrollbar {
+  width: 6px;
+}
